@@ -554,6 +554,7 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
     NSString *superClassName;
     NSString *protocolNames;
     [scanner scanUpToString:@":" intoString:&className];
+    // 有继承关系才会进来
     if (!scanner.isAtEnd) {
         scanner.scanLocation = scanner.scanLocation + 1;
         [scanner scanUpToString:@"<" intoString:&superClassName];
@@ -595,9 +596,11 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
         NSDictionary *methodDict = [jsMethods toDictionary];
         for (NSString *jsMethodName in methodDict.allKeys) {
             JSValue *jsMethodArr = [jsMethods valueForProperty:jsMethodName];
+            // 取出方法参数个数
             int numberOfArg = [jsMethodArr[0] toInt32];
             NSString *selectorName = convertJPSelectorString(jsMethodName);
             
+            //有参数的话selector后面要加上：
             if ([selectorName componentsSeparatedByString:@":"].count - 1 < numberOfArg) {
                 selectorName = [selectorName stringByAppendingString:@":"];
             }
@@ -630,6 +633,12 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
         }
     }
     
+    /*
+     第一个@ 是返回值  id type encode = @
+     第二个是self
+     第三个是_cmd/SEL
+     第四个是入参
+     */
     class_addMethod(cls, @selector(getProp:), (IMP)getPropIMP, "@@:@");
     class_addMethod(cls, @selector(setProp:forKey:), (IMP)setPropIMP, "v@:@@");
 
@@ -968,7 +977,6 @@ static void _initJPOverideMethods(Class cls) {
 static void overrideMethod(Class cls, NSString *selectorName, JSValue *function, BOOL isClassMethod, const char *typeDescription)
 {
     SEL selector = NSSelectorFromString(selectorName);
-    
     if (!typeDescription) {
         Method method = class_getInstanceMethod(cls, selector);
         typeDescription = (char *)method_getTypeEncoding(method);
@@ -1012,6 +1020,8 @@ static void overrideMethod(Class cls, NSString *selectorName, JSValue *function,
     
     // Replace the original selector at last, preventing threading issus when
     // the selector get called during the execution of `overrideMethod`
+    
+    // ??? 为什么交换要换给_objc_msgForward IMP
     class_replaceMethod(cls, selector, msgForwardIMP, typeDescription);
 }
 
@@ -1738,6 +1748,7 @@ static NSString *extractStructName(NSString *typeEncodeString)
 
 static NSString *trim(NSString *string)
 {
+    //过去字符串开始和结束的空格
     return [string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
